@@ -1,0 +1,141 @@
+Arduino code:  
+Velocity: 
+#define ENCA 2 // YELLOW 
+#define ENCB 3 // WHITE 
+#define PWM 5 
+#define IN2 6 
+#define IN1 7 
+ 
+volatile int posi = 0;  
+// diff time 
+  float CurrT=0; 
+ float PrevT=0; 
+ float dT=0; 
+// diff pos 
+ float CurrPos=0; 
+ float PrevPos=0; 
+ float dP=0; 
+ // Velocity 
+ float velocity; 
+ float CurrVel; 
+ float PrevVel; 
+ // error parameters 
+ int eCurr=0; 
+ int ePrev=0; 
+ float eDrev=0; 
+ float eIntegral=0; 
+ // pid parameters 
+ float kp=7.5; 
+ float ki=0.05; 
+ float kd=0.075; 
+// control signal 
+ int setPoint=40; 
+ float pid =0; 
+ float pwm=0; 
+ bool b; 
+ int dir; 
+ 
+void setup() { 
+    delay(4000); 
+  Serial.begin(9600); 
+  pinMode(ENCA,INPUT); 
+  pinMode(ENCB,INPUT); 
+  attachInterrupt(digitalPinToInterrupt(ENCA),readEncoder,RISING); 
+   
+  pinMode(PWM,OUTPUT); 
+  pinMode(IN1,OUTPUT); 
+  pinMode(IN2,OUTPUT); 
+   
+  Serial.println("target vel"); 
+} 
+ 
+void loop() { 
+  calcVelocity(); 
+  calcPIDterms(); 
+  calcDirection(); 
+  setMotor(dir,pwm,PWM,IN1,IN2); 
+   Serial.print(velocity); 
+  Serial.print("   "); 
+  Serial.println(setPoint); 
+} 
+void calcVelocity() 
+{ 
+  CurrT = micros(); 
+  CurrPos = posi; 
+ 
+  dT=(CurrT-PrevT)*1.0e-6; 
+  dP=(CurrPos - PrevPos); 
+   
+  velocity = dP/dT; // in degree/sec 
+  // convert to rad / sec 
+  velocity = velocity*(3.14/180); 
+  // convert to rpm 
+  velocity = velocity*9.554; 
+ 
+  PrevVel= CurrVel; 
+  PrevPos=CurrPos; 
+   
+} 
+void readEncoder() 
+{ 
+  cli(); 
+  b = digitalRead(ENCB); 
+  if(b==1) 
+    posi++; 
+   else if(b==0) 
+    posi--; 
+  sei(); 
+} 
+void calcPIDterms() 
+{ 
+  CurrT = micros(); 
+  eCurr = velocity - setPoint; 
+  dT = (CurrT-PrevT)/1.0e6; 
+  eDrev= (eCurr-ePrev)/(dT); 
+  eIntegral = eIntegral + eCurr * dT;  
+  PrevT = CurrT; 
+  ePrev=eCurr; 
+  //PID Terms 
+  pid = kp*eCurr + ki*eIntegral + kd*eDrev; 
+} 
+/* 
+void moveFwd() 
+{ 
+  digitalWrite(IN1,HIGH); 
+  digitalWrite(IN2,LOW); 
+  analogWrite(PWM,pwm); 
+} 
+*/ 
+void calcDirection(){ 
+  if(pid<0){ 
+      pwm = fabs(pid); 
+   
+  if( pwm > 255 ) 
+    pwm = 255; 
+} 
+  else if(pid>0) 
+  { 
+    pwm=0; 
+} 
+     dir = 1; 
+  if(pid<0){ 
+    dir = -1; 
+  } 
+ 
+} 
+ 
+void setMotor(int dir, int pwmVal, int pwm, int in1, int in2){ 
+  analogWrite(pwm,pwmVal); 
+  if(dir == 1){ 
+    digitalWrite(in1,LOW); 
+    digitalWrite(in2,HIGH); 
+  } 
+  else if(dir == -1){ 
+    digitalWrite(in1,HIGH); 
+    digitalWrite(in2,LOW); 
+  } 
+  else{ 
+    digitalWrite(in1,LOW); 
+    digitalWrite(in2,LOW); 
+  }   
+} 
